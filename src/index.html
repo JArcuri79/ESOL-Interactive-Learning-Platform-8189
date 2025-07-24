@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>ESOL Learning App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Force cache busting for dynamic content
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      
+      // Disable pull-to-refresh on mobile
+      document.addEventListener('touchmove', function(e) {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      // Add event listener to handle mobile network issues
+      window.addEventListener('online', function() {
+        console.log('Network is back online, refreshing data...');
+        window.dispatchEvent(new CustomEvent('network-status-change', { detail: { status: 'online' } }));
+      });
+      
+      window.addEventListener('offline', function() {
+        console.log('Network is offline, switching to local storage...');
+        window.dispatchEvent(new CustomEvent('network-status-change', { detail: { status: 'offline' } }));
+      });
+      
+      // Initialize custom event handling for cross-device sync
+      window.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM fully loaded - setting up event handlers');
+        
+        // Setup heartbeat to keep connections alive
+        setInterval(function() {
+          // Trigger a tiny localStorage update to keep sync alive
+          localStorage.setItem('heartbeat', Date.now());
+          
+          // Dispatch heartbeat event
+          window.dispatchEvent(new CustomEvent('heartbeat', { 
+            detail: { timestamp: Date.now() } 
+          }));
+        }, 5000);
+        
+        // Add shake detection for mobile devices to force refresh
+        if ('DeviceMotionEvent' in window) {
+          console.log('Device motion API available');
+          let lastTime = 0;
+          let lastX = 0;
+          let lastY = 0;
+          let lastZ = 0;
+          const threshold = 15;
+          const interval = 150;
+          
+          window.addEventListener('devicemotion', function(event) {
+            const current = event.accelerationIncludingGravity;
+            if (!current) return;
+            
+            const currentTime = new Date().getTime();
+            const diffTime = currentTime - lastTime;
+            
+            if (diffTime > interval) {
+              const diffX = Math.abs(current.x - lastX);
+              const diffY = Math.abs(current.y - lastY);
+              const diffZ = Math.abs(current.z - lastZ);
+              
+              if (diffX > threshold && diffY > threshold || 
+                  diffX > threshold && diffZ > threshold || 
+                  diffY > threshold && diffZ > threshold) {
+                // Shake detected, trigger refresh
+                console.log('Shake detected, triggering force refresh');
+                window.dispatchEvent(new CustomEvent('force-refresh', {}));
+              }
+              
+              lastTime = currentTime;
+              lastX = current.x;
+              lastY = current.y;
+              lastZ = current.z;
+            }
+          });
+        } else {
+          console.log('Device motion API not available');
+        }
+        
+        // Add double tap to force refresh
+        let lastTap = 0;
+        document.addEventListener('touchend', function(event) {
+          const currentTime = new Date().getTime();
+          const tapLength = currentTime - lastTap;
+          if (tapLength < 300 && tapLength > 0) {
+            console.log('Double tap detected, triggering force refresh');
+            window.dispatchEvent(new CustomEvent('force-refresh', {}));
+            event.preventDefault();
+          }
+          lastTap = currentTime;
+        });
+        
+        // Add manual periodic force refresh for mobile devices that might have gone to sleep
+        setInterval(function() {
+          window.dispatchEvent(new CustomEvent('force-refresh', {}));
+          console.log('Periodic force refresh triggered');
+        }, 30000); // Every 30 seconds
+      });
+    </script>
+  </body>
+</html>
